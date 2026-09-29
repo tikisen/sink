@@ -47,6 +47,25 @@ export const linkTombstones = sqliteTable('link_tombstones', {
   deletedAt: integer('deleted_at').notNull(),
 })
 
+/**
+ * Permanent click history: nightly Sink rollups (server/utils/history-rollup.ts)
+ * plus imported Bitly-era history (scripts/import-bitly-history.mjs). See
+ * shared/schemas/history.ts for the read contract this table serves.
+ */
+export const clickHistory = sqliteTable('click_history', {
+  linkId: text('link_id').notNull(), // links.id; '' for undated Bitly dimension totals with no link match
+  slug: text().notNull(), // slug at time of recording, for display only (not part of the key)
+  day: text().notNull(), // 'YYYY-MM-DD' UTC, or 'all' for undated Bitly dimension totals
+  dim: text().notNull(), // 'total' | 'country' | 'deviceType' | 'referer'
+  value: text().notNull().default(''), // '' for dim = 'total'
+  clicks: integer().notNull(),
+  source: text().notNull(), // 'sink' | 'bitly' | transient 'sink-staging:<uuid>' during a rollup swap
+}, table => [
+  primaryKey({ columns: [table.linkId, table.day, table.dim, table.value, table.source] }),
+  index('click_history_day_idx').on(table.day),
+  index('click_history_source_day_idx').on(table.source, table.day),
+])
+
 export const linkMigrationRuns = sqliteTable('link_migration_runs', {
   id: text().primaryKey(),
   expectedCursor: text('expected_cursor'),

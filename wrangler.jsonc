@@ -59,6 +59,8 @@
     }
   ],
   "triggers": {
-    "crons": ["0 0 * * *"] // Run backup task daily at 00:00 UTC
+    // 00:00 UTC: R2 backup (existing). 03:15 UTC: click-history rollup for the
+    // previous UTC day (server/plugins/backup.ts branches on which cron fired).
+    "crons": ["0 0 * * *", "15 3 * * *"]
   }
 }
