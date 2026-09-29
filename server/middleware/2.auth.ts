@@ -1,6 +1,14 @@
 import { timingSafeEqual } from 'node:crypto'
 
 export default eventHandler(async (event) => {
+  // /api/version identifies the deployed source (commit/tag, this fork's URL) for
+  // AGPL corresponding-source purposes and carries no secrets — it stays
+  // reachable without a token. It is deliberately excluded from the Cloudflare
+  // Access application that gates the rest of /api/* (see docs/plans/active/
+  // 2026-09-28-sink-shortener.md Phase 2.5), so it is genuinely public.
+  if (event.path === '/api/version')
+    return
+
   if (!event.path.startsWith('/api/'))
     return
 

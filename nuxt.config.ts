@@ -46,6 +46,10 @@ export default defineNuxtConfig({
       maxUrlLength: '16384',
       homeURL: process.env.NUXT_HOME_URL || '',
       linkProxyEnabled: false,
+      // Baked at build time by the deploy script (git rev-parse HEAD / the deploy-YYYYMMDD-N tag),
+      // so /api/version can identify the exact running source per the fork's AGPL note in README.
+      deployCommit: '',
+      deployTag: '',
     },
   },
   routeRules: {

@@ -2,6 +2,8 @@
 
 **A Simple, Speedy, Secure, and Serverless Link Shortener with Analytics, Running Entirely on Cloudflare.**
 
+> **This is a fork.** Deployed at a private `workers.dev` address for personal use by [tikisen](https://github.com/tikisen). Source for the running version: **https://github.com/tikisen/sink**, at the commit/tag reported by `GET /api/version` (public, no auth). Upstream project: [miantiao-me/Sink](https://github.com/miantiao-me/Sink), tagged here as `upstream-v0.3.1`. Sink is AGPL-3.0-only — this note plus `/api/version` is how this fork satisfies the corresponding-source requirement for anyone interacting with the deployed instance over a network. Every production deploy is built from a pushed, tagged commit (`deploy-YYYYMMDD-N`); see `docs/plans/active/2026-09-28-sink-shortener.md` in the `tikisen` monorepo for the deployment plan and its "Change surface" section for the exact file diff against upstream.
+
 [Website](https://sink.cool) · [Documentation](https://docs.sink.cool) · [API Reference](https://sink.cool/_docs/scalar)
 
 <a href="https://trendshift.io/repositories/20331" target="_blank">
