@@ -52,7 +52,13 @@ function upstreamHeaders(init: RequestInit | undefined): Record<string, string> 
 
 async function createProxyLink(url: string, extra: Record<string, unknown> = {}): Promise<string> {
   const slug = `proxy-${crypto.randomUUID()}`
-  const response = await postJson('/api/link/create', { url, slug, proxy: true, ...extra })
+  // A default title keeps this file's own mockUpstream/upstreamCalls
+  // bookkeeping isolated from the unrelated background title-extraction
+  // feature (scheduleLinkTitleExtraction skips any link that already has
+  // one) -- without it, every link created without an explicit title would
+  // also trigger a real fetch() to its destination, which this file's
+  // fetch spy would count as an extra, unexpected upstream call.
+  const response = await postJson('/api/link/create', { url, slug, proxy: true, title: `test link ${slug}`, ...extra })
   expect(response.status).toBe(201)
   createdSlugs.push(slug)
   return slug
