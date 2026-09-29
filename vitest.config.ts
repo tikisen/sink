@@ -47,6 +47,14 @@ export default defineConfig(async ({ mode }) => ({
     maxWorkers: 1,
     setupFiles: ['./tests/setup.ts'],
     testTimeout: 10_000,
+    // tests/e2e/** are @playwright/test specs (a real browser against a
+    // built, deployed-style server via `pnpm test:e2e`) -- running them
+    // through vitest's Cloudflare Workers pool crashes the shared worker
+    // (discovered adding tests/e2e/dashboard-navigation.spec.ts: vitest's
+    // default include glob picked it up, Playwright's `test`/`expect`
+    // aren't vitest's, and the whole run aborted partway with "Worker
+    // exited unexpectedly").
+    exclude: ['**/node_modules/**', '**/tests/e2e/**'],
     onUnhandledError(error) {
       return !isHandledValidationError(error)
     },

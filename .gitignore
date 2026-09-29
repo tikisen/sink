@@ -40,3 +40,9 @@ opencode.json
 
 # Local deepwork session state
 .slim/deepwork/
+
+# Playwright
+test-results
+playwright-report
+blob-report
+playwright/.cache
