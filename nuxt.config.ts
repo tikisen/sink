@@ -18,6 +18,12 @@ export default defineNuxtConfig({
     siteToken: process.env.NUXT_SITE_TOKEN || randomBytes(32).toString('base64url'),
     cfAccessTeamDomain: '',
     cfAccessAud: '',
+    // F33/F34 (docs/reviews/2026-09-28-sink-shortener.rev3.codex-review.md):
+    // JSON array of { audience, name, allow: [{method, path}] } — lets a
+    // second, narrower Cloudflare Access application (its own aud, its own
+    // service-token policies) authenticate as something OTHER than
+    // root-equivalent. See server/utils/cloudflare-access.ts.
+    cfAccessScopedAuds: '',
     redirectStatusCode: '301',
     linkCacheTtl: 60,
     redirectWithQuery: false,

@@ -20,20 +20,31 @@ export default eventHandler(async (event) => {
     return
   }
 
-  const accessIdentity = await verifyCloudflareAccess(event)
-  if (accessIdentity) {
-    if (isCloudflareAccessRequestAllowed(event)) {
-      Object.assign(
-        event.context,
-        mapCloudflareAccessIdentity(accessIdentity, getRequestURL(event).hostname),
-      )
-      return
+  const access = await verifyCloudflareAccess(event)
+  if (access) {
+    if (!isCloudflareAccessRequestAllowed(event)) {
+      throw createError({
+        status: 403,
+        statusText: 'Forbidden',
+      })
     }
 
-    throw createError({
-      status: 403,
-      statusText: 'Forbidden',
-    })
+    // F33/F34: a restricted-scope audience (e.g. the Raycast/Hermes
+    // automation app) only authenticates for its declared method+path
+    // allowlist. Access already keeps its tokens off the broad Admin app at
+    // the edge; this is the defense-in-depth check inside Sink itself.
+    if (!isRequestAllowedByScope(access.scope, event.method, event.path)) {
+      throw createError({
+        status: 403,
+        statusText: 'Forbidden: credential is not scoped for this operation',
+      })
+    }
+
+    Object.assign(
+      event.context,
+      mapCloudflareAccessIdentity(access.identity, getRequestURL(event).hostname),
+    )
+    return
   }
 
   setResponseHeader(event, 'WWW-Authenticate', 'Bearer')

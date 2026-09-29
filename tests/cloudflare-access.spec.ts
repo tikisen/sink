@@ -3,7 +3,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import {
   isCloudflareAccessConfigured,
   isCloudflareAccessRequestSafe,
+  isRequestAllowedByScope,
   mapCloudflareAccessIdentity,
+  parseScopedAudiences,
   verifyCloudflareAccessToken,
 } from '../server/utils/cloudflare-access'
 import { fetchWithAuth, setLinkStoreD1Mode } from './utils'
@@ -229,6 +231,53 @@ describe('cloudflare Access CSRF protection', () => {
       hasAccessCookie: true,
       requestOrigin: 'https://sink.example.com',
     })).toBe(false)
+  })
+})
+
+describe('cloudflare Access scoped audiences (F33/F34)', () => {
+  const rule = { method: 'POST', path: '/api/link/create' }
+
+  it('parses a well-formed scoped-audience config', () => {
+    const json = JSON.stringify([{ audience: 'aud-1', name: 'raycast', allow: [rule] }])
+    expect(parseScopedAudiences(json)).toEqual([{ audience: 'aud-1', name: 'raycast', allow: [rule] }])
+  })
+
+  it.each([
+    ['empty string', ''],
+    ['whitespace', '   '],
+    ['not JSON', '{not json'],
+    ['not an array', JSON.stringify({ audience: 'a', name: 'b', allow: [rule] })],
+    ['missing audience', JSON.stringify([{ name: 'b', allow: [rule] }])],
+    ['blank audience', JSON.stringify([{ audience: '  ', name: 'b', allow: [rule] }])],
+    ['missing name', JSON.stringify([{ audience: 'a', allow: [rule] }])],
+    ['empty allow list', JSON.stringify([{ audience: 'a', name: 'b', allow: [] }])],
+    ['allow entry missing method', JSON.stringify([{ audience: 'a', name: 'b', allow: [{ path: '/x' }] }])],
+    ['allow entry missing path', JSON.stringify([{ audience: 'a', name: 'b', allow: [{ method: 'GET' }] }])],
+  ])('never throws and yields no scoped audiences for %s', (_label, input) => {
+    expect(() => parseScopedAudiences(input)).not.toThrow()
+    expect(parseScopedAudiences(input)).toEqual([])
+  })
+
+  it('drops only the malformed entries out of a mixed array', () => {
+    const json = JSON.stringify([
+      { audience: 'good', name: 'raycast', allow: [rule] },
+      { audience: 'bad' }, // missing name/allow
+    ])
+    expect(parseScopedAudiences(json)).toEqual([{ audience: 'good', name: 'raycast', allow: [rule] }])
+  })
+
+  it('admin scope allows every method/path', () => {
+    expect(isRequestAllowedByScope({ kind: 'admin' }, 'DELETE', '/api/link/delete')).toBe(true)
+  })
+
+  it('restricted scope allows only its exact, case-insensitive-method allowlist', () => {
+    const scope = { kind: 'restricted' as const, name: 'raycast', allow: [rule, { method: 'GET', path: '/api/link/query' }] }
+    expect(isRequestAllowedByScope(scope, 'POST', '/api/link/create')).toBe(true)
+    expect(isRequestAllowedByScope(scope, 'post', '/api/link/create')).toBe(true)
+    expect(isRequestAllowedByScope(scope, 'GET', '/api/link/query')).toBe(true)
+    expect(isRequestAllowedByScope(scope, 'GET', '/api/link/delete')).toBe(false)
+    expect(isRequestAllowedByScope(scope, 'POST', '/api/link/delete')).toBe(false)
+    expect(isRequestAllowedByScope(scope, 'GET', '/api/link/query/')).toBe(false) // no prefix matching
   })
 })
 

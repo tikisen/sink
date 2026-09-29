@@ -109,17 +109,87 @@ export function mapCloudflareAccessIdentity(
   }
 }
 
-export async function verifyCloudflareAccess(event: H3Event): Promise<CloudflareAccessIdentity | null> {
-  const { cfAccessTeamDomain, cfAccessAud } = useRuntimeConfig(event)
+/**
+ * F33/F34: a request can authenticate against the broad Admin Access
+ * application (full API surface, matching Sink's original design) OR
+ * against a narrower, separately-configured Access application whose own
+ * audience only covers a declared allowlist of exact method+path pairs.
+ * `AccessScope` records which one matched so the caller (server/middleware/
+ * 2.auth.ts) can enforce that allowlist — Access already restricts which
+ * PATH can even reach the narrow app's policies at the edge, but Sink must
+ * still recognize that audience at all (a single hard-coded `cfAccessAud`
+ * check rejects every other audience outright) and must still refuse an
+ * out-of-allowlist method/path if it ever reaches Sink some other way.
+ */
+export interface AccessScopeRule {
+  method: string
+  path: string
+}
+
+export type AccessScope
+  = | { kind: 'admin' }
+    | { kind: 'restricted', name: string, allow: AccessScopeRule[] }
+
+interface ScopedAudienceConfig {
+  audience: string
+  name: string
+  allow: AccessScopeRule[]
+}
+
+function isAccessScopeRule(value: unknown): value is AccessScopeRule {
+  return !!value && typeof value === 'object'
+    && typeof (value as Record<string, unknown>).method === 'string'
+    && typeof (value as Record<string, unknown>).path === 'string'
+}
+
+/** Parses NUXT_CF_ACCESS_SCOPED_AUDS. Malformed/empty input yields no scoped audiences — never throws, never silently grants admin scope. */
+export function parseScopedAudiences(json: string): ScopedAudienceConfig[] {
+  if (!json || !json.trim())
+    return []
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (!Array.isArray(parsed))
+      return []
+    return parsed.filter((entry): entry is ScopedAudienceConfig =>
+      !!entry
+      && typeof entry.audience === 'string' && entry.audience.trim().length > 0
+      && typeof entry.name === 'string' && entry.name.trim().length > 0
+      && Array.isArray(entry.allow) && entry.allow.length > 0 && entry.allow.every(isAccessScopeRule))
+  }
+  catch {
+    return []
+  }
+}
+
+/** Exact method (case-insensitive) + exact path match — no prefix/wildcard matching, so the allowlist can't accidentally widen. */
+export function isRequestAllowedByScope(scope: AccessScope, method: string, path: string): boolean {
+  if (scope.kind === 'admin')
+    return true
+  return scope.allow.some(rule => rule.method.toUpperCase() === method.toUpperCase() && rule.path === path)
+}
+
+export async function verifyCloudflareAccess(event: H3Event): Promise<{ identity: CloudflareAccessIdentity, scope: AccessScope } | null> {
+  const { cfAccessTeamDomain, cfAccessAud, cfAccessScopedAuds } = useRuntimeConfig(event)
   const issuer = cfAccessTeamDomain.trim().replace(/\/+$/, '')
-  const audience = cfAccessAud.trim()
-  if (!issuer || !audience)
+  if (!issuer)
+    return null
+
+  const candidates: Array<{ audience: string, scope: AccessScope }> = []
+  const adminAudience = cfAccessAud.trim()
+  if (adminAudience)
+    candidates.push({ audience: adminAudience, scope: { kind: 'admin' } })
+  for (const scoped of parseScopedAudiences(cfAccessScopedAuds))
+    candidates.push({ audience: scoped.audience, scope: { kind: 'restricted', name: scoped.name, allow: scoped.allow } })
+
+  if (!candidates.length)
     return null
 
   for (const token of getAccessTokens(event)) {
-    const identity = await verifyCloudflareAccessToken(token, { audience, issuer })
-    if (identity)
-      return identity
+    for (const candidate of candidates) {
+      const identity = await verifyCloudflareAccessToken(token, { audience: candidate.audience, issuer })
+      if (identity)
+        return { identity, scope: candidate.scope }
+    }
   }
 
   return null
