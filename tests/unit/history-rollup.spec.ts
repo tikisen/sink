@@ -76,6 +76,32 @@ describe('rollupHistory — atomicity (F21)', { concurrent: false }, () => {
   })
 })
 
+describe('rollupHistory — fails closed on missing config (F31)', { concurrent: false }, () => {
+  it('throws before touching D1 when cfAccountId/cfApiToken are empty and no fetcher is injected', async () => {
+    const day = '2024-01-10'
+    await db.insert(clickHistory).values({ linkId: 'link-1', slug: 'existing', day, dim: 'total', value: '', clicks: 42, source: 'sink' })
+
+    // No `fetcher` option — this exercises the REAL createAnalyticsFetcher path,
+    // which is exactly the scheduled-hook code path this finding is about.
+    await expect(rollupHistory(env, day, { dataset: 'sink', cfAccountId: '', cfApiToken: '' }))
+      .rejects
+      .toThrow('cfAccountId and cfApiToken are required')
+
+    const rows = await rowsForDay(day)
+    expect(rows).toEqual([expect.objectContaining({ linkId: 'link-1', clicks: 42, source: 'sink' })])
+  })
+
+  it('throws when dataset is empty, even with a fetcher injected', async () => {
+    await expect(rollupHistory(env, '2024-01-11', { dataset: '', cfAccountId: 'x', cfApiToken: 'y' }, { fetcher: totalOnlyFetcher([]) }))
+      .rejects
+      .toThrow('dataset is required')
+  })
+
+  it('does NOT throw when a fetcher is injected, even with empty account/token (the test-only path)', async () => {
+    await expect(rollupHistory(env, '2024-01-13', TEST_CONFIG, { fetcher: totalOnlyFetcher([]) })).resolves.toEqual({ day: '2024-01-13', rows: 0 })
+  })
+})
+
 describe('rollupHistory — merges duplicate primary keys before writing', { concurrent: false }, () => {
   it('sums clicks into one row when AE returns two rows for the same link (a mid-day slug rename)', async () => {
     const day = '2024-01-12'

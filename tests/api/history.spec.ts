@@ -1,4 +1,4 @@
-import type { HistoryRollupRunResponse, HistorySummaryResponse } from '../../shared/schemas/history'
+import type { HistorySummaryResponse } from '../../shared/schemas/history'
 import { eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { clickHistory } from '../../server/database/schema'
@@ -79,15 +79,18 @@ describe('/api/history/summary', { concurrent: false }, () => {
 })
 
 describe('/api/history/rollup', { concurrent: false }, () => {
-  it('backfills a bounded range of days and each call is reflected in the summary', async () => {
-    // No Analytics Engine token is configured in the test env, so rollupHistory's
-    // fetcher short-circuits to zero rows per day — this exercises the HTTP
-    // plumbing (auth, validation, per-day looping) without depending on a live AE call.
-    const response = await postJson('/api/history/rollup', { from: '2024-02-01', to: '2024-02-02' })
-    expect(response.status).toBe(200)
-    const data: HistoryRollupRunResponse = await response.json()
-    expect(data.days.map(d => d.day)).toEqual(['2024-02-01', '2024-02-02'])
-    expect(data.days.every(d => d.rows === 0)).toBe(true)
+  it('fails closed (500) when no Analytics Engine token is configured, rather than silently writing empty days (F31)', async () => {
+    // The test env has no NUXT_CF_ACCOUNT_ID/NUXT_CF_API_TOKEN configured —
+    // this proves the HTTP backfill route surfaces rollupHistory's fail-closed
+    // guard (server/utils/history-rollup.ts) instead of quietly succeeding
+    // with zero rows, which is what used to happen before the F31 fix.
+    await seed([{ linkId: 'link-1', slug: 'a', day: '2024-02-01', dim: 'total', clicks: 3 }])
+    const response = await postJson('/api/history/rollup', { from: '2024-02-01', to: '2024-02-01' })
+    expect(response.status).toBe(500)
+
+    // And the existing day must be provably untouched by the failed attempt.
+    const rows = await db.select().from(clickHistory).where(eq(clickHistory.day, '2024-02-01'))
+    expect(rows).toEqual([expect.objectContaining({ linkId: 'link-1', clicks: 3 })])
   })
 
   it('rejects a backfill range over 92 days', async () => {

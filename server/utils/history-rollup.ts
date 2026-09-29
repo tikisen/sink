@@ -85,6 +85,21 @@ function mergeByPrimaryKey(rows: Array<HistoryDimensionRow & { dim: string }>, d
  */
 export async function rollupHistory(env: Cloudflare.Env, day: string, config: RollupHistoryConfig, options: RollupHistoryOptions = {}): Promise<RollupHistoryResult> {
   const { dataset, cfAccountId, cfApiToken } = config
+
+  // F31 (docs/reviews/2026-09-28-sink-shortener.rev3.codex-review.md): fail
+  // closed on missing config instead of silently treating it as "zero
+  // clicks today". createAnalyticsFetcher() returns { data: [] } for empty
+  // account/token — correct for the dashboard's live "today" read (better to
+  // show no data than crash), but disastrous for this write path: an empty
+  // result here would stage zero rows and the atomic swap would happily
+  // replace a real day of history with nothing. Only the REAL fetcher path
+  // needs a live account+token; an injected test fetcher (every test in
+  // this file uses one) never calls Cloudflare, so it's exempt.
+  if (!dataset)
+    throw new Error('rollupHistory: dataset is required (got empty string)')
+  if (!options.fetcher && (!cfAccountId || !cfApiToken))
+    throw new Error('rollupHistory: cfAccountId and cfApiToken are required for the real Analytics Engine fetcher (got empty value) — refusing to stage a possibly-empty day')
+
   const fetcher = options.fetcher ?? createAnalyticsFetcher(cfAccountId, cfApiToken)
   const { fromUnix, toUnixExclusive } = unixRangeForDay(day)
 
