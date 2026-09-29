@@ -142,12 +142,24 @@ function isAccessScopeRule(value: unknown): value is AccessScopeRule {
     && typeof (value as Record<string, unknown>).path === 'string'
 }
 
-/** Parses NUXT_CF_ACCESS_SCOPED_AUDS. Malformed/empty input yields no scoped audiences — never throws, never silently grants admin scope. */
-export function parseScopedAudiences(json: string): ScopedAudienceConfig[] {
-  if (!json || !json.trim())
+/**
+ * Parses NUXT_CF_ACCESS_SCOPED_AUDS. Malformed/empty input yields no scoped
+ * audiences — never throws, never silently grants admin scope.
+ *
+ * Takes `unknown`, not `string`: Nitro's Cloudflare-preset runtime-config
+ * merge runs every Worker var through `destr` (smart-parse: a value that
+ * looks like JSON becomes real JSON) before handing it to
+ * `useRuntimeConfig(event)`. A JSON-array-shaped var — exactly this one —
+ * therefore arrives as an already-parsed array, not a string, even though
+ * the actual Cloudflare binding is `plain_text`. Confirmed live: a bare
+ * `typeof cfAccessScopedAuds === 'string'` check failed in production while
+ * `JSON.parse(json)` on the very same string worked perfectly in isolation.
+ */
+export function parseScopedAudiences(input: unknown): ScopedAudienceConfig[] {
+  if (input === undefined || input === null || input === '')
     return []
   try {
-    const parsed: unknown = JSON.parse(json)
+    const parsed: unknown = typeof input === 'string' ? JSON.parse(input) : input
     if (!Array.isArray(parsed))
       return []
     return parsed.filter((entry): entry is ScopedAudienceConfig =>

@@ -33,7 +33,9 @@ export default eventHandler(async (event) => {
     // automation app) only authenticates for its declared method+path
     // allowlist. Access already keeps its tokens off the broad Admin app at
     // the edge; this is the defense-in-depth check inside Sink itself.
-    if (!isRequestAllowedByScope(access.scope, event.method, event.path)) {
+    // event.path includes the query string (see middleware/1.redirect.ts's
+    // own parsePath() call for the same reason) — compare the pathname only.
+    if (!isRequestAllowedByScope(access.scope, event.method, getRequestURL(event).pathname)) {
       throw createError({
         status: 403,
         statusText: 'Forbidden: credential is not scoped for this operation',

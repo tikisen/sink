@@ -246,16 +246,30 @@ describe('cloudflare Access scoped audiences (F33/F34)', () => {
     ['empty string', ''],
     ['whitespace', '   '],
     ['not JSON', '{not json'],
-    ['not an array', JSON.stringify({ audience: 'a', name: 'b', allow: [rule] })],
+    ['not an array (string)', JSON.stringify({ audience: 'a', name: 'b', allow: [rule] })],
     ['missing audience', JSON.stringify([{ name: 'b', allow: [rule] }])],
     ['blank audience', JSON.stringify([{ audience: '  ', name: 'b', allow: [rule] }])],
     ['missing name', JSON.stringify([{ audience: 'a', allow: [rule] }])],
     ['empty allow list', JSON.stringify([{ audience: 'a', name: 'b', allow: [] }])],
     ['allow entry missing method', JSON.stringify([{ audience: 'a', name: 'b', allow: [{ path: '/x' }] }])],
     ['allow entry missing path', JSON.stringify([{ audience: 'a', name: 'b', allow: [{ method: 'GET' }] }])],
+    // Non-string inputs: Nitro's Cloudflare-preset runtime-config merge runs
+    // every Worker var through `destr`, which smart-parses a JSON-looking
+    // string var into a real array/object before Sink ever sees it — a real
+    // production behavior this function must tolerate (see its docstring).
+    ['undefined', undefined],
+    ['null', null],
+    ['a non-array object (already parsed by destr)', { audience: 'a', name: 'b', allow: [rule] }],
+    ['a number', 42],
+    ['a boolean', true],
   ])('never throws and yields no scoped audiences for %s', (_label, input) => {
     expect(() => parseScopedAudiences(input)).not.toThrow()
     expect(parseScopedAudiences(input)).toEqual([])
+  })
+
+  it('accepts an already-parsed array (the actual production shape after destr)', () => {
+    const alreadyParsed = [{ audience: 'aud-1', name: 'raycast', allow: [rule] }]
+    expect(parseScopedAudiences(alreadyParsed)).toEqual(alreadyParsed)
   })
 
   it('drops only the malformed entries out of a mixed array', () => {
