@@ -429,26 +429,28 @@ function copyLink() {
             </template>
             <Skeleton v-else class="h-5 w-28 rounded-full bg-secondary" />
           </div>
-          <div
-            v-if="tags.length"
-            class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1"
+        </div>
+        <!-- tags get their own row so a crowded date+counters line never
+             forces them to wrap/clip inside the card (Round 4, Part B). -->
+        <div
+          v-if="tags.length"
+          class="flex h-5 w-full min-w-0 items-center gap-1 overflow-hidden"
+        >
+          <Badge
+            v-for="tag in visibleTags"
+            :key="tag"
+            variant="outline"
+            class="max-w-24 min-w-0 shrink truncate"
           >
-            <Badge
-              v-for="tag in visibleTags"
-              :key="tag"
-              variant="outline"
-              class="max-w-24 min-w-0 shrink truncate"
-            >
-              {{ tag }}
-            </Badge>
-            <Badge
-              v-if="hiddenTagCount"
-              variant="outline"
-              class="shrink-0 text-muted-foreground"
-            >
-              +{{ hiddenTagCount }}
-            </Badge>
-          </div>
+            {{ tag }}
+          </Badge>
+          <Badge
+            v-if="hiddenTagCount"
+            variant="outline"
+            class="shrink-0 text-muted-foreground"
+          >
+            +{{ hiddenTagCount }}
+          </Badge>
         </div>
       </div>
     </CardContent>
