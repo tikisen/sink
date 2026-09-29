@@ -6,7 +6,10 @@ export default eventHandler(async (event) => {
   // reachable without a token. It is deliberately excluded from the Cloudflare
   // Access application that gates the rest of /api/* (see docs/plans/active/
   // 2026-09-28-sink-shortener.md Phase 2.5), so it is genuinely public.
-  if (event.path === '/api/version')
+  // event.path includes the query string (confirmed while fixing the F33/F34
+  // scope check below with the same bug) — an exact match here would
+  // wrongly require auth for e.g. /api/version?anything.
+  if (getRequestURL(event).pathname === '/api/version')
     return
 
   if (!event.path.startsWith('/api/'))
