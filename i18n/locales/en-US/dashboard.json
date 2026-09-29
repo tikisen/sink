@@ -82,5 +82,24 @@
       "last_12h": "Last 12 hours",
       "last_24h": "Last 24 hours"
     }
+  },
+  "history": {
+    "clicks": "Clicks",
+    "total_clicks": "Total Clicks",
+    "range_7d": "7d",
+    "range_30d": "30d",
+    "range_12mo": "12mo",
+    "range_all": "All time",
+    "from": "From",
+    "to": "To",
+    "includes_live_today": "Includes live today",
+    "top_links": "Top Links",
+    "countries": "Countries",
+    "device_types": "Device Types",
+    "referers": "Referers",
+    "value_column": "Value",
+    "bitly_all_time": "All time (Bitly era)",
+    "bitly_all_time_description": "Undated totals imported from Bitly — not part of any date range above.",
+    "load_failed": "Failed to load click history."
   }
 }

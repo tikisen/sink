@@ -27,6 +27,7 @@
   "nav": {
     "links": "Links",
     "analysis": "Analysis",
+    "history": "History",
     "realtime": "Realtime",
     "check": "Check",
     "migrate": "Import/Export"

@@ -23,6 +23,12 @@ const platformItems = computed<NavItem[]>(() => [
     isActive: isActive('analysis'),
   },
   {
+    title: 'nav.history',
+    url: '/dashboard/history',
+    icon: DASHBOARD_ROUTES.history.icon,
+    isActive: isActive('history'),
+  },
+  {
     title: 'nav.realtime',
     url: '/dashboard/realtime',
     icon: DASHBOARD_ROUTES.realtime.icon,
