@@ -1,5 +1,9 @@
 import type { H3Event } from 'h3'
 import type { EditLink, Link } from '#shared/schemas/link'
+import { and, eq, isNull, or } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/d1'
+import { links } from '../database/schema'
+import { fetchPageTitle } from './link-title'
 
 const editableOptionalLinkFields = [
   'comment',
@@ -89,6 +93,46 @@ async function applyEditableLinkPassword(newLink: Link, password?: string): Prom
     newLink.password = await normalizeLinkPasswordForStorage(newLink.password)
 }
 
+/**
+ * Fire-and-forget background title extraction for a freshly created link
+ * that has no title (F/Round-4-B). Bindings are captured synchronously,
+ * before entering the async continuation -- background code must not rely
+ * on useRuntimeConfig(event)/event.context lookups happening lazily inside
+ * a waitUntil task, since by then the request may no longer be live (the
+ * same lesson as the F31 scheduled-rollup fix in history-rollup.ts).
+ */
+export function scheduleLinkTitleExtraction(event: H3Event, link: Pick<Link, 'slug' | 'url' | 'title'>): void {
+  if (link.title?.trim())
+    return
+
+  const env = event.context.cloudflare.env
+  const context = event.context.cloudflare.context
+  const slug = link.slug
+  const url = link.url
+
+  context.waitUntil((async () => {
+    try {
+      const title = await fetchPageTitle(url)
+      if (!title)
+        return
+      const db = drizzle(env.DB)
+      await db.update(links)
+        .set({ title })
+        .where(and(
+          eq(links.slug, slug),
+          or(isNull(links.title), eq(links.title, '')),
+        ))
+    }
+    catch (error) {
+      console.warn({
+        event: 'link_title.extraction.failed',
+        slug,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  })())
+}
+
 export async function saveNewLink(event: H3Event, link: Link): Promise<LinkResponse> {
   await prepareIncomingLink(event, link)
   await hashNewLinkPassword(link)
@@ -96,6 +140,7 @@ export async function saveNewLink(event: H3Event, link: Link): Promise<LinkRespo
   if (!await createLink(event, link))
     throw createError({ status: 409, statusText: 'Link already exists' })
 
+  scheduleLinkTitleExtraction(event, link)
   return buildLinkResponse(event, link)
 }
 
@@ -107,8 +152,10 @@ export async function upsertLink(event: H3Event, link: Link): Promise<LinkRespon
     return { ...buildLinkResponse(event, existingLink), status: 'existing' }
 
   await hashNewLinkPassword(link)
-  if (await createLink(event, link))
+  if (await createLink(event, link)) {
+    scheduleLinkTitleExtraction(event, link)
     return { ...buildLinkResponse(event, link), status: 'created' }
+  }
 
   // Another writer claimed the slug between the lookup and the insert.
   const racedLink = await getAuthoritativeLink(event, link.slug)

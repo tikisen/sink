@@ -25,6 +25,8 @@
     "created_at": "Created At",
     "updated_at": "Updated At",
     "expires_at": "Expires At",
+    "destination_expand": "Show full destination URL",
+    "destination_collapse": "Collapse destination URL",
     "no_more": "No more links",
     "load_failed": "Failed to load links.",
     "download_qr_code": "Download QR Code",

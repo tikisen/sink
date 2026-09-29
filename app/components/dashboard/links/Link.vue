@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance } from 'vue'
 import type { DashboardLink } from '@/types/dashboard-links'
-import { CalendarPlus2, Copy, CopyCheck, Ellipsis, Eraser, Flame, Hourglass, Link as LinkIcon, MousePointerClick, QrCode, ShieldAlert, SquarePen, Users } from '@lucide/vue'
+import { CalendarPlus2, ChevronRight, Copy, CopyCheck, Ellipsis, Eraser, Flame, Hourglass, Link as LinkIcon, MousePointerClick, QrCode, ShieldAlert, SquarePen, Users } from '@lucide/vue'
 import { useClipboard, useMediaQuery } from '@vueuse/core'
 import { parseURL } from 'ufo'
 import { toast } from 'vue-sonner'
+import { mediumDate } from '@/utils/time'
 
 const props = defineProps<{
   link: DashboardLink
@@ -15,6 +16,7 @@ const editPopoverOpen = shallowRef(false)
 const qrDialogOpen = shallowRef(false)
 const editDialogOpen = shallowRef(false)
 const deleteDialogOpen = shallowRef(false)
+const destinationExpanded = shallowRef(false)
 const actionsTriggerRef = useTemplateRef<ComponentPublicInstance>('actionsTrigger')
 const isDesktop = useMediaQuery('(min-width: 640px)')
 
@@ -78,10 +80,19 @@ function getLinkHost(url: string): string | undefined {
 }
 
 const shortLink = computed(() => `${origin}/${props.link.slug}`)
-const linkIcon = computed(() => `https://unavatar.webp.se/${getLinkHost(props.link.url)}?fallback=https://sink.cool/icon.png`)
+const linkIcon = computed(() => {
+  const linkHost = getLinkHost(props.link.url)
+  return linkHost
+    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(linkHost)}&sz=64`
+    : '/icon.png'
+})
 const isExpired = computed(() => Boolean(props.link.expiration && props.link.expiration <= Math.floor(Date.now() / 1000)))
 const noteText = computed(() => props.link.comment?.trim() ?? '')
 const summaryText = computed(() => props.link.title?.trim() || props.link.description?.trim() || '')
+// Bitly-style row (Round 4, Part B): bold title above the short link, always
+// showing something even when no title/description was set or fetched yet.
+const displayTitle = computed(() => summaryText.value || getLinkHost(props.link.url) || props.link.slug)
+const createdDateLabel = computed(() => mediumDate(props.link.createdAt, locale.value))
 const tags = computed(() => props.link.tags ?? [])
 const visibleTags = computed(() => tags.value.slice(0, 2))
 const hiddenTagCount = computed(() => Math.max(0, tags.value.length - visibleTags.value.length))
@@ -122,6 +133,10 @@ function copyLink() {
 
           <div class="min-w-0 flex-1 overflow-hidden">
             <div class="flex min-w-0 items-center">
+              <!-- Bitly-style row (Round 4, Part B): bold page title on top,
+                   linking to the detail page (the stretched after:absolute
+                   overlay makes the whole card clickable, same as before,
+                   just now anchored to the title instead of the short link). -->
               <TooltipProvider v-if="noteText">
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -137,13 +152,7 @@ function copyLink() {
                       "
                       :to="getDashboardLinkDetailLocation(link.slug)"
                     >
-                      <span class="sm:hidden">{{ link.slug }}</span>
-                      <span
-                        class="
-                          hidden
-                          sm:inline
-                        "
-                      >{{ host }}/{{ link.slug }}</span>
+                      {{ displayTitle }}
                     </NuxtLink>
                   </TooltipTrigger>
                   <TooltipContent class="max-w-[90svw] break-all">
@@ -161,13 +170,7 @@ function copyLink() {
                 "
                 :to="getDashboardLinkDetailLocation(link.slug)"
               >
-                <span class="sm:hidden">{{ link.slug }}</span>
-                <span
-                  class="
-                    hidden
-                    sm:inline
-                  "
-                >{{ host }}/{{ link.slug }}</span>
+                {{ displayTitle }}
               </NuxtLink>
               <span
                 v-if="link.unsafe"
@@ -187,9 +190,34 @@ function copyLink() {
               </Badge>
             </div>
 
-            <p v-if="summaryText" class="truncate text-sm">
-              {{ summaryText }}
-            </p>
+            <!-- short link, de-emphasized under the bold title, with an
+                 inline copy icon right next to it (Bitly-style). -->
+            <div
+              class="
+                mt-0.5 flex min-w-0 items-center gap-1 text-sm
+                text-muted-foreground
+              "
+            >
+              <span class="min-w-0 truncate">
+                <span class="sm:hidden">{{ link.slug }}</span>
+                <span
+                  class="
+                    hidden
+                    sm:inline
+                  "
+                >{{ host }}/{{ link.slug }}</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="relative z-20 size-5 shrink-0"
+                :aria-label="copied ? $t('links.copy_success') : shortLink"
+                @click="copyLink"
+              >
+                <CopyCheck v-if="copied" aria-hidden="true" class="size-3.5" />
+                <Copy v-else aria-hidden="true" class="size-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -199,16 +227,6 @@ function copyLink() {
             sm:gap-0
           "
         >
-          <Button
-            variant="ghost"
-            :size="isDesktop ? 'icon' : 'icon-lg'"
-            :aria-label="copied ? $t('links.copy_success') : shortLink"
-            @click="copyLink"
-          >
-            <CopyCheck v-if="copied" aria-hidden="true" class="size-4" />
-            <Copy v-else aria-hidden="true" class="size-4" />
-          </Button>
-
           <Button as-child variant="ghost" :size="isDesktop ? 'icon' : 'icon-lg'">
             <a
               :href="link.url"
@@ -283,8 +301,47 @@ function copyLink() {
           </DropdownMenu>
         </div>
       </div>
-      <div class="mt-auto flex flex-col space-y-3">
-        <div class="flex h-5 w-full min-w-0 space-x-2 overflow-hidden text-sm">
+      <div class="mt-auto flex flex-col space-y-2">
+        <!-- destination URL: clickable, truncated by default, with a ↳
+             arrow and a collapse toggle that reveals the full URL
+             (Bitly-style row, Round 4 Part B). -->
+        <div class="flex min-w-0 items-center gap-1 text-sm">
+          <button
+            type="button"
+            class="
+              relative z-20 inline-flex size-5 shrink-0 items-center
+              justify-center rounded-sm outline-none
+              focus-visible:ring-2 focus-visible:ring-ring/50
+            "
+            :aria-expanded="destinationExpanded"
+            :aria-label="destinationExpanded ? $t('links.destination_collapse') : $t('links.destination_expand')"
+            @click="destinationExpanded = !destinationExpanded"
+          >
+            <ChevronRight
+              aria-hidden="true"
+              class="size-4 shrink-0 transition-transform duration-200"
+              :class="destinationExpanded ? 'rotate-90' : ''"
+            />
+          </button>
+          <span aria-hidden="true" class="shrink-0 text-muted-foreground">↳</span>
+          <a
+            :href="link.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="
+              relative z-20 min-w-0 text-muted-foreground underline-offset-2
+              hover:underline
+            "
+            :class="destinationExpanded ? 'break-all whitespace-normal' : `
+              truncate
+            `"
+          >{{ link.url }}</a>
+        </div>
+        <div
+          class="
+            flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm
+          "
+        >
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -297,7 +354,7 @@ function copyLink() {
                   "
                   :aria-label="$t('links.created_at')"
                 >
-                  <CalendarPlus2 aria-hidden="true" class="mr-1 size-4" /> {{ shortDate(link.createdAt, locale) }}
+                  <CalendarPlus2 aria-hidden="true" class="mr-1 size-4" /> {{ createdDateLabel }}
                 </button>
               </TooltipTrigger>
               <TooltipContent>
@@ -329,13 +386,6 @@ function copyLink() {
               </Tooltip>
             </TooltipProvider>
           </template>
-          <Separator orientation="vertical" />
-          <span class="min-w-0 truncate">{{ link.url }}</span>
-        </div>
-        <div
-          v-if="tags.length || countersMap"
-          class="flex h-5 w-full min-w-0 items-center gap-2 text-sm"
-        >
           <div
             v-if="countersMap"
             class="flex shrink-0 items-center gap-1 tabular-nums"

@@ -34,6 +34,11 @@ export function longDate(unix = 0, locale?: string) {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(unix * 1000)
 }
 
+/** "Jun 9, 2026" style -- used by the Bitly-style link list row (Round 4, Part B). */
+export function mediumDate(unix = 0, locale?: string) {
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' }).format(unix * 1000)
+}
+
 export function shortTime(unix = 0, locale?: string) {
   return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(unix * 1000)
 }
