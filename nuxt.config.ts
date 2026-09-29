@@ -48,8 +48,12 @@ export default defineNuxtConfig({
       linkProxyEnabled: false,
       // Baked at build time by the deploy script (git rev-parse HEAD / the deploy-YYYYMMDD-N tag),
       // so /api/version can identify the exact running source per the fork's AGPL note in README.
-      deployCommit: '',
-      deployTag: '',
+      // Explicit process.env reads (matching the homeURL pattern above) are required: Cloudflare
+      // Workers have no real process.env at runtime, so Nuxt's generic runtimeConfig env-override
+      // never reaches this value there — only Vite's build-time substitution does, and that only
+      // fires for keys read this way.
+      deployCommit: process.env.NUXT_PUBLIC_DEPLOY_COMMIT || '',
+      deployTag: process.env.NUXT_PUBLIC_DEPLOY_TAG || '',
     },
   },
   routeRules: {
