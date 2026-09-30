@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HistoryDimensionEntry, HistorySummaryResponse, HistoryTopLink } from '#shared/schemas/history'
+import { today } from '@internationalized/date'
 import NumberFlow from '@number-flow/vue'
 
 definePageMeta({
@@ -16,38 +17,39 @@ type Preset = '7d' | '30d' | '12mo' | 'all'
 
 const ALL_TIME_FROM = '2020-01-01'
 
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10)
+// Click-history days are America/Chicago calendar days (TQ decided
+// 2026-09-30), regardless of the viewer's own browser timezone -- these
+// presets must line up with that, not with `to.value`/-1 or the browser's
+// local date, or "7d" would silently ask for the wrong 7 days for anyone not
+// physically in Central time.
+function todayCentral(): string {
+  return today('America/Chicago').toString()
 }
 
-function daysAgoUtc(count: number): string {
-  const date = new Date()
-  date.setUTCDate(date.getUTCDate() - count)
-  return date.toISOString().slice(0, 10)
+function daysAgoCentral(count: number): string {
+  return today('America/Chicago').subtract({ days: count }).toString()
 }
 
-function monthsAgoUtc(count: number): string {
-  const date = new Date()
-  date.setUTCMonth(date.getUTCMonth() - count)
-  return date.toISOString().slice(0, 10)
+function monthsAgoCentral(count: number): string {
+  return today('America/Chicago').subtract({ months: count }).toString()
 }
 
 const route = useRoute()
 const linkId = computed(() => typeof route.query.linkId === 'string' && route.query.linkId ? route.query.linkId : undefined)
 
 const preset = shallowRef<Preset>('7d')
-const from = shallowRef(daysAgoUtc(6))
-const to = shallowRef(todayUtc())
+const from = shallowRef(daysAgoCentral(6))
+const to = shallowRef(todayCentral())
 
 function selectPreset(next: Preset) {
   preset.value = next
-  to.value = todayUtc()
+  to.value = todayCentral()
   if (next === '7d')
-    from.value = daysAgoUtc(6)
+    from.value = daysAgoCentral(6)
   else if (next === '30d')
-    from.value = daysAgoUtc(29)
+    from.value = daysAgoCentral(29)
   else if (next === '12mo')
-    from.value = monthsAgoUtc(12)
+    from.value = monthsAgoCentral(12)
   else
     from.value = ALL_TIME_FROM
 }

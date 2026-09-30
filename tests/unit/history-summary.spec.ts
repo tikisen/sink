@@ -1,18 +1,18 @@
 import type { HistoryRow } from '../../server/utils/history-summary'
 import { describe, expect, it } from 'vitest'
-import { computeHistorySummary, enumerateUtcDays } from '../../server/utils/history-summary'
+import { computeHistorySummary, enumerateCentralDays } from '../../server/utils/history-summary'
 
 function row(overrides: Partial<HistoryRow>): HistoryRow {
   return { linkId: 'link-1', slug: 'slug-1', day: '2026-09-27', dim: 'total', value: '', clicks: 1, ...overrides }
 }
 
-describe('enumerateUtcDays', () => {
+describe('enumerateCentralDays', () => {
   it('is inclusive of both endpoints', () => {
-    expect(enumerateUtcDays('2026-09-27', '2026-09-29')).toEqual(['2026-09-27', '2026-09-28', '2026-09-29'])
+    expect(enumerateCentralDays('2026-09-27', '2026-09-29')).toEqual(['2026-09-27', '2026-09-28', '2026-09-29'])
   })
 
   it('returns exactly one day when from equals to', () => {
-    expect(enumerateUtcDays('2026-09-27', '2026-09-27')).toEqual(['2026-09-27'])
+    expect(enumerateCentralDays('2026-09-27', '2026-09-27')).toEqual(['2026-09-27'])
   })
 })
 

@@ -4,10 +4,15 @@ export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook('cloudflare:scheduled', async (event) => {
     const env = event.env as Cloudflare.Env
 
-    // Second cron (wrangler.jsonc "15 3 * * *"): nightly click-history rollup
-    // for the Sink shortener prototype. Keep this guard first so the daily
-    // R2 backup cron below is unaffected.
-    if ((event.controller as ScheduledController).cron === '15 3 * * *') {
+    // Second cron (wrangler.jsonc "30 6 * * *"): nightly click-history rollup
+    // for the Sink shortener prototype. 06:30 UTC is chosen specifically to
+    // land after America/Chicago midnight in BOTH DST states (CDT is UTC-5,
+    // so Central midnight is 05:00 UTC; CST is UTC-6, so it's 06:00 UTC) --
+    // days are now America/Chicago calendar days (TQ decided 2026-09-30), so
+    // rolling up "yesterday" only means the right thing once Central midnight
+    // has actually passed. Keep this guard first so the daily R2 backup cron
+    // below is unaffected.
+    if ((event.controller as ScheduledController).cron === '30 6 * * *') {
       await runScheduledRollup(env)
       return
     }
@@ -56,7 +61,7 @@ async function runScheduledRollup(env: Cloudflare.Env): Promise<void> {
   }
 
   try {
-    await rollupHistory(env, utcYesterday(), { dataset, cfAccountId, cfApiToken })
+    await rollupHistory(env, centralYesterday(), { dataset, cfAccountId, cfApiToken })
   }
   catch (error) {
     // rollupHistory's own fetch-before-write ordering (F21) already

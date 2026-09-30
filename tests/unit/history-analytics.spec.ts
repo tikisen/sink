@@ -1,46 +1,105 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildHistoryDimensionQuery,
+  centralDateString,
+  centralMonthBucket,
+  centralToday,
+  centralYesterday,
   createAnalyticsFetcher,
   fetchHistoryDimension,
-  nextUtcDay,
-  unixRangeForDay,
-  utcDateString,
-  utcMonthBucket,
-  utcToday,
-  utcYesterday,
+  HISTORY_TIME_ZONE,
+  nextCentralDay,
+  unixRangeForCentralDay,
 } from '../../server/utils/history-analytics'
 
-describe('history-analytics date helpers', () => {
-  it('formats a UTC date as YYYY-MM-DD', () => {
-    expect(utcDateString(new Date('2026-09-28T23:59:59.000Z'))).toBe('2026-09-28')
+describe('history-analytics date helpers (America/Chicago days, TQ decided 2026-09-30)', () => {
+  it('uses America/Chicago as the click-history timezone', () => {
+    expect(HISTORY_TIME_ZONE).toBe('America/Chicago')
   })
 
-  it('advances and rewinds UTC calendar days, including across month/year boundaries', () => {
-    expect(nextUtcDay('2026-09-28')).toBe('2026-09-29')
-    expect(nextUtcDay('2026-09-30')).toBe('2026-10-01')
-    expect(nextUtcDay('2026-12-31')).toBe('2027-01-01')
-    expect(nextUtcDay('2026-09-28', -1)).toBe('2026-09-27')
-    expect(nextUtcDay('2026-01-01', -1)).toBe('2025-12-31')
+  it('formats an instant as its America/Chicago calendar day', () => {
+    // 2026-09-28T23:59:59Z is 2026-09-28 18:59:59 CDT -- still the 28th.
+    expect(centralDateString(new Date('2026-09-28T23:59:59.000Z'))).toBe('2026-09-28')
+  })
+
+  it('a late-evening Central click stays on the same Central day even though it is already the next UTC day', () => {
+    // The exact bug this migration fixes (same class as the WelcomeMed fix):
+    // 23:30 Central on 2026-09-29 is 2026-09-30T04:30:00Z in CDT -- already
+    // the 30th in UTC, but still the 29th for the person who clicked.
+    const lateEveningCentralClick = new Date('2026-09-29T23:30:00-05:00')
+    expect(centralDateString(lateEveningCentralClick)).toBe('2026-09-29')
+    expect(lateEveningCentralClick.toISOString().slice(0, 10)).toBe('2026-09-30') // the UTC day it would wrongly land on
+  })
+
+  it('advances and rewinds Central calendar days, including across month/year boundaries', () => {
+    expect(nextCentralDay('2026-09-28')).toBe('2026-09-29')
+    expect(nextCentralDay('2026-09-30')).toBe('2026-10-01')
+    expect(nextCentralDay('2026-12-31')).toBe('2027-01-01')
+    expect(nextCentralDay('2026-09-28', -1)).toBe('2026-09-27')
+    expect(nextCentralDay('2026-01-01', -1)).toBe('2025-12-31')
   })
 
   it('computes yesterday relative to an explicit today, not the real clock', () => {
-    expect(utcYesterday('2026-03-01')).toBe('2026-02-28')
+    expect(centralYesterday('2026-03-01')).toBe('2026-02-28')
   })
 
-  it('utcToday matches the current UTC date', () => {
-    expect(utcToday()).toBe(utcDateString(new Date()))
+  it('centralToday matches the current instant\'s America/Chicago date', () => {
+    expect(centralToday()).toBe(centralDateString(new Date()))
   })
 
-  it('gives a half-open unix-second range for one UTC day', () => {
-    const { fromUnix, toUnixExclusive } = unixRangeForDay('2026-09-28')
-    expect(toUnixExclusive - fromUnix).toBe(86_400)
-    expect(new Date(fromUnix * 1000).toISOString()).toBe('2026-09-28T00:00:00.000Z')
-    expect(new Date(toUnixExclusive * 1000).toISOString()).toBe('2026-09-29T00:00:00.000Z')
+  it('buckets a day into its Central month', () => {
+    expect(centralMonthBucket('2026-09-28')).toBe('2026-09')
   })
 
-  it('buckets a day into its UTC month', () => {
-    expect(utcMonthBucket('2026-09-28')).toBe('2026-09')
+  describe('unixRangeForCentralDay (DST-aware, per docs/plans/active/2026-09-28-sink-shortener.md)', () => {
+    it('gives a 24h window for an ordinary CDT day', () => {
+      const { fromUnix, toUnixExclusive } = unixRangeForCentralDay('2026-09-29')
+      expect(toUnixExclusive - fromUnix).toBe(86_400)
+      expect(new Date(fromUnix * 1000).toISOString()).toBe('2026-09-29T05:00:00.000Z')
+      expect(new Date(toUnixExclusive * 1000).toISOString()).toBe('2026-09-30T05:00:00.000Z')
+    })
+
+    it('gives a 24h window for an ordinary CST day', () => {
+      const { fromUnix, toUnixExclusive } = unixRangeForCentralDay('2026-01-15')
+      expect(toUnixExclusive - fromUnix).toBe(86_400)
+      expect(new Date(fromUnix * 1000).toISOString()).toBe('2026-01-15T06:00:00.000Z')
+      expect(new Date(toUnixExclusive * 1000).toISOString()).toBe('2026-01-16T06:00:00.000Z')
+    })
+
+    it('gives a 23h window on the spring-forward transition day (2026-03-08)', () => {
+      const { fromUnix, toUnixExclusive } = unixRangeForCentralDay('2026-03-08')
+      expect(toUnixExclusive - fromUnix).toBe(23 * 3600)
+      expect(new Date(fromUnix * 1000).toISOString()).toBe('2026-03-08T06:00:00.000Z')
+      expect(new Date(toUnixExclusive * 1000).toISOString()).toBe('2026-03-09T05:00:00.000Z')
+    })
+
+    it('is back to a 24h window the day after spring-forward', () => {
+      const { fromUnix, toUnixExclusive } = unixRangeForCentralDay('2026-03-09')
+      expect(toUnixExclusive - fromUnix).toBe(86_400)
+    })
+
+    it('gives a 25h window on the fall-back transition day (2026-11-01)', () => {
+      const { fromUnix, toUnixExclusive } = unixRangeForCentralDay('2026-11-01')
+      expect(toUnixExclusive - fromUnix).toBe(25 * 3600)
+      expect(new Date(fromUnix * 1000).toISOString()).toBe('2026-11-01T05:00:00.000Z')
+      expect(new Date(toUnixExclusive * 1000).toISOString()).toBe('2026-11-02T06:00:00.000Z')
+    })
+
+    it('is back to a 24h window the day after fall-back', () => {
+      const { fromUnix, toUnixExclusive } = unixRangeForCentralDay('2026-11-02')
+      expect(toUnixExclusive - fromUnix).toBe(86_400)
+    })
+
+    it('never hardcodes a -5 or -6 offset: every window is computed from the IANA tz database per day', () => {
+      // If this were hardcoded to -5 (CDT), the CST day below would be wrong
+      // by an hour; if hardcoded to -6 (CST), the CDT day above would be
+      // wrong by an hour. Both already-asserted windows above being exactly
+      // right, for different offsets, is the proof -- this test just names it.
+      const cdt = unixRangeForCentralDay('2026-09-29')
+      const cst = unixRangeForCentralDay('2026-01-15')
+      expect(new Date(cdt.fromUnix * 1000).getUTCHours()).toBe(5)
+      expect(new Date(cst.fromUnix * 1000).getUTCHours()).toBe(6)
+    })
   })
 })
 

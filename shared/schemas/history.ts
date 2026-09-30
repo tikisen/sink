@@ -10,7 +10,7 @@ import { z } from 'zod'
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_SUMMARY_RANGE_DAYS = 3660
-/** Above this many days, `series` buckets by UTC month ('YYYY-MM') instead of day. */
+/** Above this many days, `series` buckets by America/Chicago month ('YYYY-MM') instead of day. */
 export const HISTORY_MONTH_BUCKET_THRESHOLD_DAYS = 92
 
 export const HistoryDaySchema = z.string().regex(DAY_PATTERN, 'must be YYYY-MM-DD')
@@ -22,8 +22,8 @@ function daysBetweenInclusive(from: string, to: string): number {
 }
 
 export const HistorySummaryQuerySchema = z.object({
-  from: HistoryDaySchema.describe('Start of the window, inclusive, UTC calendar day (YYYY-MM-DD).'),
-  to: HistoryDaySchema.describe('End of the window, inclusive, UTC calendar day (YYYY-MM-DD).'),
+  from: HistoryDaySchema.describe('Start of the window, inclusive, America/Chicago calendar day (YYYY-MM-DD).'),
+  to: HistoryDaySchema.describe('End of the window, inclusive, America/Chicago calendar day (YYYY-MM-DD).'),
   linkId: z.string().trim().min(1).max(26).optional().describe('Restrict to one link (links.id, stable across slug renames).'),
 }).refine(({ from, to }) => from <= to, {
   message: 'from must be less than or equal to to',
@@ -68,7 +68,7 @@ export interface HistoryDimensionEntry {
 export interface HistorySummaryResponse {
   from: string
   to: string
-  /** True when `to` includes the current UTC day, whose count came from live Analytics Engine, not the permanent table. */
+  /** True when `to` includes the current America/Chicago day, whose count came from live Analytics Engine, not the permanent table. */
   includesLiveToday: boolean
   total: number
   series: HistorySeriesPoint[]

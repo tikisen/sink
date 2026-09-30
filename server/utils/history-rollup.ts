@@ -6,7 +6,7 @@ import {
   createAnalyticsFetcher,
   fetchHistoryDimension,
   HISTORY_DIMS,
-  unixRangeForDay,
+  unixRangeForCentralDay,
 } from './history-analytics'
 
 /**
@@ -67,7 +67,7 @@ function mergeByPrimaryKey(rows: Array<HistoryDimensionRow & { dim: string }>, d
 }
 
 /**
- * Rolls up one UTC day of Analytics Engine access logs into the permanent
+ * Rolls up one America/Chicago day of Analytics Engine access logs into the permanent
  * click_history table for all four dimensions (F21/F22 in
  * docs/reviews/2026-09-28-sink-shortener.rev2.codex-review.md).
  *
@@ -101,7 +101,7 @@ export async function rollupHistory(env: Cloudflare.Env, day: string, config: Ro
     throw new Error('rollupHistory: cfAccountId and cfApiToken are required for the real Analytics Engine fetcher (got empty value) — refusing to stage a possibly-empty day')
 
   const fetcher = options.fetcher ?? createAnalyticsFetcher(cfAccountId, cfApiToken)
-  const { fromUnix, toUnixExclusive } = unixRangeForDay(day)
+  const { fromUnix, toUnixExclusive } = unixRangeForCentralDay(day)
 
   // 1. Fetch every dimension first. Any throw here happens before any D1 write.
   const rawRows: Array<HistoryDimensionRow & { dim: string }> = []

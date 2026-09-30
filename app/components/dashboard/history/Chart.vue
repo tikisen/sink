@@ -25,8 +25,15 @@ const chartConfig = computed<ChartConfig>(() => ({
   },
 }))
 
+// `day` is an America/Chicago calendar day/month string ('YYYY-MM-DD' or, for
+// ranges over 92 days, 'YYYY-MM'). This only produces a monotonic, evenly-
+// spaced numeric x-position for the chart -- the Z suffix is an arbitrary,
+// consistent anchor instant, not a claim that the day itself is UTC. Nothing
+// here is ever shown to the viewer: the crosshair tooltip's label comes from
+// the raw day string via ChartTooltipContent's `payload[labelKey]` (see the
+// template below), never from re-formatting this timestamp, so there is no
+// timezone-shift risk in what's actually displayed.
 function parseDay(day: string): number {
-  // 'YYYY-MM' month buckets (range > 92 days) or 'YYYY-MM-DD' days — both UTC.
   return day.length === 7 ? Date.parse(`${day}-01T00:00:00Z`) : Date.parse(`${day}T00:00:00Z`)
 }
 

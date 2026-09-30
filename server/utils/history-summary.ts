@@ -3,7 +3,7 @@ import type { HistoryDim } from './history-analytics'
 // Relative path (not the #shared alias): this file is imported directly by
 // plain unit tests that bypass the Nitro-bundled server, where #shared isn't resolvable.
 import { HISTORY_MONTH_BUCKET_THRESHOLD_DAYS } from '../../shared/schemas/history'
-import { nextUtcDay, utcMonthBucket } from './history-analytics'
+import { centralMonthBucket, nextCentralDay } from './history-analytics'
 
 export interface HistoryRow {
   linkId: string
@@ -24,10 +24,10 @@ export interface ComputeHistorySummaryInput {
   todayByDim: Partial<Record<HistoryDim, HistoryRow[]>>
 }
 
-/** Every UTC calendar day in [from, to], inclusive. */
-export function enumerateUtcDays(from: string, to: string): string[] {
+/** Every America/Chicago calendar day in [from, to], inclusive. */
+export function enumerateCentralDays(from: string, to: string): string[] {
   const days: string[] = []
-  for (let day = from; day <= to; day = nextUtcDay(day))
+  for (let day = from; day <= to; day = nextCentralDay(day))
     days.push(day)
   return days
 }
@@ -38,7 +38,7 @@ export function enumerateUtcDays(from: string, to: string): string[] {
  * permanent click_history rows (days strictly before `today`) with live
  * Analytics Engine rows for `today`, with no double counting because the two
  * inputs never cover the same day. Exported standalone (no D1/event
- * dependency) so its exact semantics — UTC boundaries, tie order, month
+ * dependency) so its exact semantics — America/Chicago boundaries, tie order, month
  * bucketing, day='all' exclusion — are unit-testable without mocking D1 or
  * the network; server/api/history/summary.get.ts only does the I/O and calls
  * this.
@@ -47,7 +47,7 @@ export function computeHistorySummary(input: ComputeHistorySummaryInput): Histor
   const { from, to, today, historicalRows, todayByDim } = input
   const includesLiveToday = to >= today && from <= today
 
-  // --- series: one point per UTC day, or per UTC month above the threshold ---
+  // --- series: one point per Central day, or per Central month above the threshold ---
   const dailyTotals = new Map<string, number>()
   for (const row of historicalRows) {
     if (row.dim === 'total' && row.day !== 'all')
@@ -58,12 +58,12 @@ export function computeHistorySummary(input: ComputeHistorySummaryInput): Histor
     dailyTotals.set(today, (dailyTotals.get(today) ?? 0) + todayTotal)
   }
 
-  const allDays = enumerateUtcDays(from, to)
+  const allDays = enumerateCentralDays(from, to)
   let series: HistorySeriesPoint[]
   if (allDays.length > HISTORY_MONTH_BUCKET_THRESHOLD_DAYS) {
     const monthly = new Map<string, number>()
     for (const day of allDays) {
-      const bucket = utcMonthBucket(day)
+      const bucket = centralMonthBucket(day)
       monthly.set(bucket, (monthly.get(bucket) ?? 0) + (dailyTotals.get(day) ?? 0))
     }
     series = [...monthly.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, clicks]) => ({ day, clicks }))

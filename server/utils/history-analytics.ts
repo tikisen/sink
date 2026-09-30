@@ -1,5 +1,17 @@
+import { fromAbsolute, parseDate, toCalendarDate, toZoned } from '@internationalized/date'
 import { sql } from 'kysely'
 import { compileAnalyticsQuery, createAnalyticsQuery } from './analytics-sql'
+
+/**
+ * Click-history days are America/Chicago calendar days, not UTC (TQ decided
+ * 2026-09-30 -- the same fix already made in WelcomeMed: an evening click
+ * after 7 PM Central was showing under the next UTC day). Every boundary
+ * below is computed per-day via `@internationalized/date`'s IANA tz-database
+ * lookup (the same library `app/utils/time.ts` already uses for the
+ * dashboard's own date pickers) -- never a hardcoded -5/-6 offset, so it's
+ * correct across both DST transitions.
+ */
+export const HISTORY_TIME_ZONE = 'America/Chicago'
 
 /**
  * The four dimensions the nightly rollup and the live "today" query both read.
@@ -97,33 +109,43 @@ export async function fetchHistoryDimension(
   }))
 }
 
-export function utcDateString(date: Date): string {
-  return date.toISOString().slice(0, 10)
+/** The America/Chicago calendar day (YYYY-MM-DD) containing the instant `at`. */
+export function centralDateString(at: Date = new Date()): string {
+  return toCalendarDate(fromAbsolute(at.getTime(), HISTORY_TIME_ZONE)).toString()
 }
 
-export function utcToday(): string {
-  return utcDateString(new Date())
+export function centralToday(): string {
+  return centralDateString()
 }
 
-export function utcYesterday(from: string = utcToday()): string {
-  return nextUtcDay(from, -1)
+export function centralYesterday(from: string = centralToday()): string {
+  return nextCentralDay(from, -1)
 }
 
-/** Adds `offsetDays` (default 1) UTC calendar days to a 'YYYY-MM-DD' string. */
-export function nextUtcDay(day: string, offsetDays = 1): string {
-  const [year, month, date] = day.split('-').map(Number)
-  const next = new Date(Date.UTC(year!, month! - 1, date! + offsetDays))
-  return utcDateString(next)
+/**
+ * Adds `offsetDays` (default 1) calendar days to a 'YYYY-MM-DD' Central day
+ * string. Pure Gregorian-calendar arithmetic on the date fields themselves --
+ * it never re-derives a timezone offset, so it needs no DST awareness of its
+ * own (only unixRangeForCentralDay, which turns a day into real UTC instants,
+ * does).
+ */
+export function nextCentralDay(day: string, offsetDays = 1): string {
+  return parseDate(day).add({ days: offsetDays }).toString()
 }
 
-/** [fromUnix, toUnixExclusive) for one UTC calendar day. */
-export function unixRangeForDay(day: string): { fromUnix: number, toUnixExclusive: number } {
-  const [year, month, date] = day.split('-').map(Number)
-  const fromUnix = Date.UTC(year!, month! - 1, date!) / 1000
-  const toUnixExclusive = Date.UTC(year!, month! - 1, date! + 1) / 1000
+/**
+ * [fromUnix, toUnixExclusive) for one America/Chicago calendar day, in unix
+ * seconds. DST-aware: `toZoned` looks up that specific day's real UTC offset
+ * via the IANA tz database, so a day is 23h on the spring-forward transition
+ * (2026-03-08) and 25h on the fall-back one (2026-11-01), never a fixed 24h.
+ */
+export function unixRangeForCentralDay(day: string): { fromUnix: number, toUnixExclusive: number } {
+  const calendarDate = parseDate(day)
+  const fromUnix = toZoned(calendarDate, HISTORY_TIME_ZONE).toDate().getTime() / 1000
+  const toUnixExclusive = toZoned(calendarDate.add({ days: 1 }), HISTORY_TIME_ZONE).toDate().getTime() / 1000
   return { fromUnix, toUnixExclusive }
 }
 
-export function utcMonthBucket(day: string): string {
+export function centralMonthBucket(day: string): string {
   return day.slice(0, 7)
 }

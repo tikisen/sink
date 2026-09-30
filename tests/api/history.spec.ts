@@ -2,6 +2,7 @@ import type { HistorySummaryResponse } from '../../shared/schemas/history'
 import { eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { clickHistory } from '../../server/database/schema'
+import { centralToday } from '../../server/utils/history-analytics'
 import { db, fetch, fetchWithAuth, postJson } from '../utils'
 
 const TEST_DAYS = ['2024-02-01', '2024-02-02', '2024-02-03']
@@ -65,11 +66,11 @@ describe('/api/history/summary', { concurrent: false }, () => {
     expect(unscoped.total).toBe(7)
   })
 
-  it('reports includesLiveToday only when the requested range reaches the current UTC day', async () => {
+  it('reports includesLiveToday only when the requested range reaches the current America/Chicago day', async () => {
     const past = await getSummary({ from: '2024-02-01', to: '2024-02-02' })
     expect(past.includesLiveToday).toBe(false)
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = centralToday()
     const current = await getSummary({ from: today, to: today })
     expect(current.includesLiveToday).toBe(true)
     // No Analytics Engine token is configured in the test env, so live "today"

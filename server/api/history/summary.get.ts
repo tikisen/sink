@@ -5,26 +5,26 @@ import { and, eq, gte, lte, ne } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/d1'
 import { HistorySummaryQuerySchema } from '#shared/schemas/history'
 import { clickHistory } from '../../database/schema'
-import { createAnalyticsFetcher, fetchHistoryDimension, HISTORY_DIMS, unixRangeForDay, utcToday, utcYesterday } from '../../utils/history-analytics'
+import { centralToday, centralYesterday, createAnalyticsFetcher, fetchHistoryDimension, HISTORY_DIMS, unixRangeForCentralDay } from '../../utils/history-analytics'
 import { computeHistorySummary } from '../../utils/history-summary'
 
 defineRouteMeta({
   openAPI: {
-    description: 'Permanent click-history summary: merges the click_history table (days before today) with live Analytics Engine (today), UTC [from, to] inclusive.',
+    description: 'Permanent click-history summary: merges the click_history table (days before today) with live Analytics Engine (today), America/Chicago [from, to] inclusive.',
     security: [{ bearerAuth: [] }],
   },
 })
 
 export default eventHandler(async (event): Promise<HistorySummaryResponse> => {
   const { from, to, linkId } = await getValidatedQuery(event, HistorySummaryQuerySchema.parse)
-  const today = utcToday()
+  const today = centralToday()
 
-  // click_history only ever holds completed days (the rollup writes yesterday
-  // at 03:15 UTC); today's count comes live from Analytics Engine so a click
-  // that just happened is never missing and never double-counted against
-  // tonight's rollup for the same day.
+  // click_history only ever holds completed days (the rollup writes
+  // yesterday's Central day shortly after Central midnight); today's count
+  // comes live from Analytics Engine so a click that just happened is never
+  // missing and never double-counted against tonight's rollup for the same day.
   const includesLiveToday = to >= today && from <= today
-  const historicalTo = to < today ? to : utcYesterday(today)
+  const historicalTo = to < today ? to : centralYesterday(today)
   const hasHistoricalPortion = from <= historicalTo
 
   const db = drizzle(event.context.cloudflare.env.DB)
@@ -47,7 +47,7 @@ export default eventHandler(async (event): Promise<HistorySummaryResponse> => {
   if (includesLiveToday) {
     const { cfAccountId, cfApiToken, dataset } = useRuntimeConfig(event)
     const fetcher = createAnalyticsFetcher(cfAccountId, cfApiToken)
-    const { fromUnix, toUnixExclusive } = unixRangeForDay(today)
+    const { fromUnix, toUnixExclusive } = unixRangeForCentralDay(today)
     for (const [dim, column] of HISTORY_DIMS) {
       const rows = await fetchHistoryDimension(fetcher, { dataset, fromUnix, toUnixExclusive, dim, column, linkId })
       todayByDim[dim] = rows.map(row => ({ ...row, day: today, dim }))
