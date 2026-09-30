@@ -39,7 +39,12 @@ export interface RollupHistoryResult {
 
 type NewClickHistoryRow = typeof clickHistory.$inferInsert
 
-const STAGE_INSERT_CHUNK = 50
+// D1 rejects a bound-parameter count above a low limit per statement; at 7
+// columns per row, 50 rows/chunk (350 params) fails in production (found
+// running the Round-5 Central-day re-bucket: "Failed query: insert into
+// click_history ... values (?, ?, ?, ?, ?, ?, ?), ..." x50, statusCode 500).
+// 10 rows/chunk (70 params) stays safely under it.
+const STAGE_INSERT_CHUNK = 10
 const STAGING_SOURCE_PREFIX = 'sink-staging:'
 
 /**

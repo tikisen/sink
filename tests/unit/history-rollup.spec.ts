@@ -102,6 +102,24 @@ describe('rollupHistory — fails closed on missing config (F31)', { concurrent:
   })
 })
 
+describe('rollupHistory — stays under D1\'s bound-parameter limit per statement', { concurrent: false }, () => {
+  it('stages more than 50 rows (the old, too-large chunk size) without a D1 "too many parameters" failure', async () => {
+    // Found running the real Central-day re-bucket (docs/plans/active/
+    // 2026-09-28-sink-shortener.md): a day with 50 links in one dimension
+    // produced a 50-row insert (350 bound params at 7 columns/row) and D1
+    // rejected the whole statement with a 500. This seeds enough distinct
+    // link ids to span multiple insert chunks and proves the write survives.
+    const day = '2024-01-14'
+    const totalRows = Array.from({ length: 63 }, (_, i) => ({ link_id: `link-${i}`, slug: `slug-${i}`, clicks: '1' }))
+    const result = await rollupHistory(env, day, TEST_CONFIG, { fetcher: totalOnlyFetcher(totalRows) })
+    expect(result.rows).toBe(63)
+
+    const rows = await rowsForDay(day)
+    expect(rows).toHaveLength(63)
+    await db.delete(clickHistory).where(eq(clickHistory.day, day))
+  })
+})
+
 describe('rollupHistory — merges duplicate primary keys before writing', { concurrent: false }, () => {
   it('sums clicks into one row when AE returns two rows for the same link (a mid-day slug rename)', async () => {
     const day = '2024-01-12'
