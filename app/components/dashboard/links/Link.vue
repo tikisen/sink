@@ -5,6 +5,7 @@ import { CalendarPlus2, ChevronRight, Copy, CopyCheck, Ellipsis, Eraser, Flame, 
 import { useClipboard, useMediaQuery } from '@vueuse/core'
 import { parseURL } from 'ufo'
 import { toast } from 'vue-sonner'
+import { buildShortUrl, resolveShortDomain } from '#shared/utils/short-link'
 import { mediumDate } from '@/utils/time'
 
 const props = defineProps<{
@@ -79,7 +80,10 @@ function getLinkHost(url: string): string | undefined {
   return host
 }
 
-const shortLink = computed(() => `${origin}/${props.link.slug}`)
+const { shortDomain } = useRuntimeConfig().public
+// Public short domain (configured / per-link override), not the dashboard's own request host.
+const shortLink = computed(() => buildShortUrl(props.link, { shortDomain, fallbackOrigin: origin }))
+const shortHost = computed(() => resolveShortDomain(props.link.domain, shortDomain) || host)
 const linkIcon = computed(() => {
   const linkHost = getLinkHost(props.link.url)
   return linkHost
@@ -205,7 +209,7 @@ function copyLink() {
                     hidden
                     sm:inline
                   "
-                >{{ host }}/{{ link.slug }}</span>
+                >{{ shortHost }}/{{ link.slug }}</span>
               </span>
               <Button
                 variant="ghost"

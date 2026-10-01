@@ -21,6 +21,8 @@ export const links = sqliteTable('links', {
   password: text(),
   unsafe: integer({ mode: 'boolean' }),
   geo: text({ mode: 'json' }).$type<Link['geo']>(),
+  // Public short domain this link is shown/copied under (tqtold.me / tqtold.us / bb.drmomsoffice.com); null = the configured default.
+  domain: text(),
   normalizedUrl: text('normalized_url').notNull(),
   effectiveExpiresAt: integer('effective_expires_at'),
 }, table => [

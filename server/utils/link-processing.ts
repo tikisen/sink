@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import type { EditLink, Link } from '#shared/schemas/link'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/d1'
+import { parseShortDomains } from '../../shared/utils/short-link'
 import { links } from '../database/schema'
 import { fetchPageTitle } from './link-title'
 
@@ -19,6 +20,7 @@ const editableOptionalLinkFields = [
   'unsafe',
   'geo',
   'tags',
+  'domain',
 ] as const satisfies readonly (keyof Link)[]
 
 export interface LinkResponse {
@@ -42,6 +44,24 @@ export function assertLinkWritesAllowed(event: H3Event, action: string): void {
   }
 }
 
+/**
+ * A per-link `domain` override must be one of NUXT_PUBLIC_SHORT_DOMAINS (or the
+ * default short domain). Unconfigured deployments (no allowlist) accept none,
+ * so a stray value can never change what a link displays.
+ */
+export function assertAllowedShortDomain(event: H3Event, domain: string | undefined): void {
+  if (!domain)
+    return
+  const { shortDomain, shortDomains } = useRuntimeConfig(event).public
+  const allowed = new Set([...parseShortDomains(shortDomains), ...parseShortDomains(shortDomain)])
+  if (!allowed.has(domain.toLowerCase())) {
+    throw createError({
+      status: 400,
+      statusText: `domain must be one of: ${[...allowed].join(', ') || '(none configured)'}`,
+    })
+  }
+}
+
 /** An explicit `unsafe` flag from the caller wins over the safety lookup. */
 async function detectUnsafeLink(event: H3Event, link: Pick<Link, 'url' | 'unsafe'>): Promise<void> {
   if (link.unsafe === undefined && !await isSafeUrl(event, link.url))
@@ -49,6 +69,7 @@ async function detectUnsafeLink(event: H3Event, link: Pick<Link, 'url' | 'unsafe
 }
 
 async function prepareIncomingLink(event: H3Event, link: Link): Promise<void> {
+  assertAllowedShortDomain(event, link.domain)
   link.slug = normalizeSlug(event, link.slug)
   await detectUnsafeLink(event, link)
 }
@@ -61,7 +82,7 @@ async function hashNewLinkPassword(link: Link): Promise<void> {
 function buildLinkResponse(event: H3Event, link: Link): LinkResponse {
   return {
     link: sanitizeLinkPassword(link),
-    shortLink: buildShortLink(event, link.slug),
+    shortLink: buildShortLink(event, link),
   }
 }
 
@@ -169,6 +190,7 @@ export async function replaceLink(event: H3Event, link: EditLink): Promise<LinkR
   assertLinkWritesAllowed(event, 'edit')
   link.slug = normalizeSlug(event, link.slug)
 
+  assertAllowedShortDomain(event, link.domain)
   const existingLink = await getAnyAuthoritativeLink(event, link.slug)
   if (!existingLink)
     throw createError({ status: 404, statusText: 'Link not found' })

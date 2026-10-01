@@ -90,6 +90,7 @@ export const LinkFieldsSchema = z.object({
   unsafe: z.boolean().optional().describe('Show a warning page before redirecting.'),
   geo: GeoSchema.optional().describe('Geo-routing rules mapping a two-letter country code to a URL.'),
   tags: TagsSchema.describe('Up to 10 normalized link tags, each 1-32 characters.'),
+  domain: z.string().trim().toLowerCase().max(253).regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/, 'must be a hostname').optional().describe('Public short-link domain override; must be one of the configured short domains. Omit for the default.'),
 })
 
 export const CreateLinkSchema = LinkFieldsSchema.extend({

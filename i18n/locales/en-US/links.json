@@ -59,6 +59,8 @@
       "url_invalid": "URL format is invalid. Enter a complete URL, such as https://example.com.",
       "url_too_long": "URL is {length} characters long, but the limit is {max}.",
       "slug": "Slug",
+      "domain": "Short domain",
+      "domain_default": "Default ({domain})",
       "comment": "Comment",
       "tags": "Tags",
       "tags_description": "Up to 10 tags, 32 characters each.",

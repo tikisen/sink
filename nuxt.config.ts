@@ -51,6 +51,11 @@ export default defineNuxtConfig({
       kvBatchLimit: '50',
       maxUrlLength: '16384',
       homeURL: process.env.NUXT_HOME_URL || '',
+      // Public short-link domain(s): NUXT_PUBLIC_SHORT_DOMAIN is the default shown/copied/QR'd/returned
+      // for every link; NUXT_PUBLIC_SHORT_DOMAINS (comma list) is the allowed set for a per-link `domain`
+      // override. Baked at build time, so set in the build env AND as Worker vars (see deployCommit below).
+      shortDomain: process.env.NUXT_PUBLIC_SHORT_DOMAIN || '',
+      shortDomains: process.env.NUXT_PUBLIC_SHORT_DOMAINS || '',
       linkProxyEnabled: false,
       // Baked at build time by the deploy script (git rev-parse HEAD / the deploy-YYYYMMDD-N tag),
       // so /api/version can identify the exact running source per the fork's AGPL note in README.

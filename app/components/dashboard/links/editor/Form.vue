@@ -6,6 +6,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { z } from 'zod'
 import { MAX_URL_LENGTH, nanoid, SlugSchema } from '#shared/schemas/link'
+import { buildShortUrl, parseShortDomains } from '#shared/utils/short-link'
 
 const props = defineProps<{
   link: Partial<DashboardLink>
@@ -159,7 +160,9 @@ watch(currentUrl, (url) => {
   void findDuplicateLink(url, generation)
 }, { immediate: true })
 
-const shortDuplicateLink = computed(() => duplicateLink.value ? `${requestUrl.origin}/${duplicateLink.value.slug}` : '')
+const { shortDomain, shortDomains } = useRuntimeConfig().public
+const shortDomainOptions = parseShortDomains(shortDomains)
+const shortDuplicateLink = computed(() => duplicateLink.value ? buildShortUrl(duplicateLink.value, { shortDomain, fallbackOrigin: requestUrl.origin }) : '')
 
 const { previewMode } = useRuntimeConfig().public
 const isExpiredLink = computed(() => Boolean(
@@ -347,6 +350,27 @@ defineExpose({ initializeRandomSlug })
               v-if="isInvalid(field)"
               :errors="formatErrors(field.state.meta.errors)"
             />
+          </Field>
+        </form.Field>
+
+        <form.Field v-if="shortDomainOptions.length > 1" v-slot="{ field }" name="domain">
+          <Field>
+            <FieldLabel :for="`${formId}-${field.name}`">
+              {{ $t('links.form.domain') }}
+            </FieldLabel>
+            <NativeSelect
+              :id="`${formId}-${field.name}`"
+              :name="field.name"
+              :model-value="field.state.value"
+              @update:model-value="field.handleChange(String($event))"
+            >
+              <NativeSelectOption value="">
+                {{ $t('links.form.domain_default', { domain: shortDomain }) }}
+              </NativeSelectOption>
+              <NativeSelectOption v-for="option in shortDomainOptions" :key="option" :value="option">
+                {{ option }}
+              </NativeSelectOption>
+            </NativeSelect>
           </Field>
         </form.Field>
 

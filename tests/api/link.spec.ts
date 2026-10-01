@@ -588,3 +588,44 @@ describe('link proxy field persistence', { concurrent: false }, () => {
     expect(clearData.link.proxy).toBe(false)
   })
 })
+
+describe('/api/link short domain (configured public domain + per-link override)', { concurrent: false }, () => {
+  const slugs: string[] = []
+
+  afterEach(async () => {
+    env.NUXT_PUBLIC_SHORT_DOMAIN = ''
+    env.NUXT_PUBLIC_SHORT_DOMAINS = ''
+    await deleteStoredLinks(slugs.splice(0))
+  })
+
+  it('returns shortLink on the configured short domain instead of the request host', async () => {
+    env.NUXT_PUBLIC_SHORT_DOMAIN = 'tqtold.me'
+    const slug = `dom-default-${crypto.randomUUID()}`
+    slugs.push(slug)
+    const response = await postJson('/api/link/create', { url: 'https://example.com/a', slug, title: 't' })
+    expect(response.status).toBe(201)
+    expect((await response.json() as { shortLink: string }).shortLink).toBe(`https://tqtold.me/${slug}`)
+  })
+
+  it('applies an allowed per-link domain override and persists it', async () => {
+    env.NUXT_PUBLIC_SHORT_DOMAIN = 'tqtold.me'
+    env.NUXT_PUBLIC_SHORT_DOMAINS = 'tqtold.me,tqtold.us,bb.drmomsoffice.com'
+    const slug = `dom-override-${crypto.randomUUID()}`
+    slugs.push(slug)
+    const response = await postJson('/api/link/create', { url: 'https://example.com/b', slug, title: 't', domain: 'tqtold.us' })
+    expect(response.status).toBe(201)
+    const data = await response.json() as { link: { domain?: string }, shortLink: string }
+    expect(data.link.domain).toBe('tqtold.us')
+    expect(data.shortLink).toBe(`https://tqtold.us/${slug}`)
+
+    const queried = await (await fetchWithAuth(`/api/link/query?slug=${slug}`)).json() as { domain?: string }
+    expect(queried.domain).toBe('tqtold.us')
+  })
+
+  it('rejects a domain outside the allowlist', async () => {
+    env.NUXT_PUBLIC_SHORT_DOMAIN = 'tqtold.me'
+    env.NUXT_PUBLIC_SHORT_DOMAINS = 'tqtold.me,tqtold.us'
+    const response = await postJson('/api/link/create', { url: 'https://example.com/c', slug: `dom-bad-${crypto.randomUUID()}`, title: 't', domain: 'evil.example' })
+    expect(response.status).toBe(400)
+  })
+})

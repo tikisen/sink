@@ -15,6 +15,7 @@ describe('link form values', () => {
       url: '',
       slug: '',
       comment: '',
+      domain: '',
       tags: [],
       expiration: undefined,
       google: '',

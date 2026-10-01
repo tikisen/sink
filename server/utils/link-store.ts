@@ -3,6 +3,7 @@ import type { Link } from '#shared/schemas/link'
 import type { LinkSearchItem } from '#shared/types/link'
 import type { ExpectedLinkVersion, LinkFilterOptions, ListLinksOptions, ListLinksResult, SearchLinksOptions } from '../services/link-store/d1'
 import { getRequestHost, getRequestProtocol } from 'h3'
+import { buildShortUrl } from '../../shared/utils/short-link'
 import {
   d1CountLinks,
   d1CreateLink,
@@ -27,8 +28,11 @@ export function normalizeSlug(event: H3Event, slug: string): string {
   return caseSensitive ? slug : slug.toLowerCase()
 }
 
-export function buildShortLink(event: H3Event, slug: string): string {
-  return `${getRequestProtocol(event)}://${getRequestHost(event)}/${slug}`
+export function buildShortLink(event: H3Event, link: { slug: string, domain?: string | null }): string {
+  return buildShortUrl(link, {
+    shortDomain: useRuntimeConfig(event).public.shortDomain,
+    fallbackOrigin: `${getRequestProtocol(event)}://${getRequestHost(event)}`,
+  })
 }
 
 async function writeThroughCache(event: H3Event, link: Link, effectiveExpiresAt?: number | null): Promise<void> {
